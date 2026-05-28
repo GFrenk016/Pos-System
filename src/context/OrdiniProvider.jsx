@@ -1,39 +1,49 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import OrdiniContext from './OrdiniContext'
 
+const API = 'http://localhost:3001/api/orders'
+
 export default function OrdiniProvider({ children }) {
-    const [ordini, setOrdini] = useState([])
-    const [prossimoId, setProssimoId] = useState(1)
+  const [ordini, setOrdini] = useState([])
 
-    function inviaOrdine(items) {
-        const nuovoOrdine = {
-        id: prossimoId,
-        ora: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
-        items,
-        itemsCucina: items.filter(i => i.categoria === 'Cucina'),
-        itemsBar:    items.filter(i => i.categoria === 'Bar'),
-        statusCucina: 'pending',
-        statusBar:    'pending',
-        }
-        setOrdini(prev => [nuovoOrdine, ...prev])
-        setProssimoId(prev => prev + 1)
-    }
+  useEffect(() => {
+    fetch(API)
+      .then(r => r.json())
+      .then(setOrdini)
+      .catch(console.error)
+  }, [])
 
-    function segnaProntoCucina(id) {
-        setOrdini(prev => prev.map(o =>
-        o.id === id ? { ...o, statusCucina: 'done' } : o
-        ))
-    }
+  async function inviaOrdine(items) {
+    const res = await fetch(API, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ items }),
+    })
+    const nuovoOrdine = await res.json()
+    setOrdini(prev => [nuovoOrdine, ...prev])
+  }
 
-    function segnaProintoBar(id) {
-        setOrdini(prev => prev.map(o =>
-        o.id === id ? { ...o, statusBar: 'done' } : o
-        ))
-    }
+  async function segnaProntoCucina(id) {
+    await fetch(`${API}/${id}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ status_cucina: 'done' }),
+    })
+    setOrdini(prev => prev.map(o => o.id === id ? { ...o, statusCucina: 'done' } : o))
+  }
 
-    return (
-        <OrdiniContext.Provider value={{ ordini, inviaOrdine, segnaProntoCucina, segnaProintoBar }}>
-        {children}
-        </OrdiniContext.Provider>
-    )
+  async function segnaProintoBar(id) {
+    await fetch(`${API}/${id}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ status_bar: 'done' }),
+    })
+    setOrdini(prev => prev.map(o => o.id === id ? { ...o, statusBar: 'done' } : o))
+  }
+
+  return (
+    <OrdiniContext.Provider value={{ ordini, inviaOrdine, segnaProntoCucina, segnaProintoBar }}>
+      {children}
+    </OrdiniContext.Provider>
+  )
 }

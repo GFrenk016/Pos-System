@@ -1,5 +1,3 @@
-import { PRODOTTI } from '../data/prodotti'
-
 const COLORI_CATEGORIA = {
     'Bar':    { bg: '#fff3e0', border: '#ff9800', testo: '#e65100' },
     'Cucina': { bg: '#e8f5e9', border: '#4caf50', testo: '#1b5e20' },
@@ -7,8 +5,8 @@ const COLORI_CATEGORIA = {
 
 const COLORE_DEFAULT = { bg: '#f3e5f5', border: '#9c27b0', testo: '#4a148c' }
 
-export default function ProductGrid({ onAdd }) {
-    const categorie = [...new Set(PRODOTTI.map(p => p.categoria))]
+export default function ProductGrid({ onAdd, prodotti = [] }) {
+    const categorie = [...new Set(prodotti.map(p => p.categoria))]
 
     return (
         <div style={{ flex: 1, overflowY: 'auto', padding: '1.2rem', background: '#f8f9fa' }}>
@@ -34,7 +32,7 @@ export default function ProductGrid({ onAdd }) {
                 gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
                 gap: '0.75rem'
                 }}>
-                {PRODOTTI.filter(p => p.categoria === cat).map(prod => (
+                {prodotti.filter(p => p.categoria === cat).map(prod => (
                     <button
                     key={prod.id}
                     onClick={() => onAdd(prod)}
