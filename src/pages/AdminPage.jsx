@@ -1,4 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useReactToPrint } from 'react-to-print'
+import Scontrino from '../components/Scontrino'
 
 const API = 'http://localhost:3001/api'
 
@@ -188,6 +190,72 @@ function TabProdotti() {
   )
 }
 
+function RigaOrdine({ o, coloreStato, labelStato }) {
+  const scontrinoRef = useRef(null)
+  const handlePrint = useReactToPrint({
+    contentRef: scontrinoRef,
+    documentTitle: `Ordine-${o.id}`,
+  })
+
+  return (
+    <div style={{
+      background: '#16213e',
+      borderRadius: '10px',
+      padding: '0.75rem 1rem',
+      border: '1px solid #1a4a8a22',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '1rem',
+      flexWrap: 'wrap',
+    }}>
+      <span style={{
+        background: '#e94560',
+        color: '#fff',
+        fontWeight: '700',
+        padding: '0.15rem 0.7rem',
+        borderRadius: '20px',
+        fontSize: '0.9rem',
+        minWidth: '45px',
+        textAlign: 'center',
+      }}>
+        #{o.id}
+      </span>
+      <span style={{ color: '#aab', fontSize: '0.85rem', minWidth: '50px' }}>{o.ora}</span>
+      <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+        {o.items.map((item, i) => (
+          <span key={i} style={{
+            background: '#0f3460',
+            color: '#fff',
+            fontSize: '0.8rem',
+            padding: '0.1rem 0.5rem',
+            borderRadius: '6px',
+          }}>
+            {item.emoji} {item.nome} x{item.quantita}
+          </span>
+        ))}
+      </div>
+      <span style={{ color: '#2ecc71', fontWeight: '700', minWidth: '55px', textAlign: 'right' }}>
+        €{Number(o.total).toFixed(2)}
+      </span>
+      <span style={{
+        color: coloreStato,
+        fontSize: '0.8rem',
+        fontWeight: '600',
+        minWidth: '100px',
+        textAlign: 'right',
+      }}>
+        {labelStato}
+      </span>
+      <button onClick={handlePrint} style={stileBtn('#0f3460')}>
+        Ristampa
+      </button>
+      <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+        <Scontrino ref={scontrinoRef} ordine={o} />
+      </div>
+    </div>
+  )
+}
+
 function TabStorico() {
   const [ordini, setOrdini] = useState([])
   const [loading, setLoading] = useState(false)
@@ -257,57 +325,14 @@ function TabStorico() {
           <p style={{ marginTop: '0.5rem' }}>Nessun ordine</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', position: 'relative' }}>
           {ordiniFiltrati.map(o => (
-            <div key={o.id} style={{
-              background: '#16213e',
-              borderRadius: '10px',
-              padding: '0.75rem 1rem',
-              border: '1px solid #1a4a8a22',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '1rem',
-              flexWrap: 'wrap',
-            }}>
-              <span style={{
-                background: '#e94560',
-                color: '#fff',
-                fontWeight: '700',
-                padding: '0.15rem 0.7rem',
-                borderRadius: '20px',
-                fontSize: '0.9rem',
-                minWidth: '45px',
-                textAlign: 'center',
-              }}>
-                #{o.id}
-              </span>
-              <span style={{ color: '#aab', fontSize: '0.85rem', minWidth: '50px' }}>{o.ora}</span>
-              <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
-                {o.items.map((item, i) => (
-                  <span key={i} style={{
-                    background: '#0f3460',
-                    color: '#fff',
-                    fontSize: '0.8rem',
-                    padding: '0.1rem 0.5rem',
-                    borderRadius: '6px',
-                  }}>
-                    {item.emoji} {item.nome} x{item.quantita}
-                  </span>
-                ))}
-              </div>
-              <span style={{ color: '#2ecc71', fontWeight: '700', minWidth: '55px', textAlign: 'right' }}>
-                €{Number(o.total).toFixed(2)}
-              </span>
-              <span style={{
-                color: coloreStato(o),
-                fontSize: '0.8rem',
-                fontWeight: '600',
-                minWidth: '100px',
-                textAlign: 'right',
-              }}>
-                {labelStato(o)}
-              </span>
-            </div>
+            <RigaOrdine
+              key={o.id}
+              o={o}
+              coloreStato={coloreStato(o)}
+              labelStato={labelStato(o)}
+            />
           ))}
         </div>
       )}
