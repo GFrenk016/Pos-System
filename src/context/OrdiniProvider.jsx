@@ -39,7 +39,7 @@ export default function OrdiniProvider({ children }) {
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ items }),
     })
-    await res.json()
+    return await res.json()
   }
 
   async function segnaProntoCucina(id) {
