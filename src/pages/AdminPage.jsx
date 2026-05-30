@@ -1,5 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useReactToPrint } from 'react-to-print'
+import { useProdotti } from '../hooks/useProdotti'
+import { useSocket } from '../hooks/useSocket'
 import Scontrino from '../components/Scontrino'
 
 const API = 'http://localhost:3001/api'
@@ -30,6 +32,9 @@ const stileBtn = (bg = '#e94560', extra = {}) => ({
   ...extra,
 })
 
+// ──────────────────────────────────────────────────────────────
+// Form aggiunta / modifica prodotto
+// ──────────────────────────────────────────────────────────────
 function FormProdotto({ initial, onSave, onCancel, loading }) {
   const [form, setForm] = useState(initial)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -37,7 +42,7 @@ function FormProdotto({ initial, onSave, onCancel, loading }) {
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: '1fr 100px 120px 80px auto auto',
+      gridTemplateColumns: '1fr 100px 120px 70px 1fr auto auto',
       gap: '0.5rem',
       alignItems: 'center',
       padding: '0.75rem',
@@ -54,6 +59,8 @@ function FormProdotto({ initial, onSave, onCancel, loading }) {
       </select>
       <input style={stileInput} placeholder="Emoji" value={form.emoji}
         onChange={e => set('emoji', e.target.value)} />
+      <input style={stileInput} placeholder="URL immagine (opzionale)" value={form.image_url || ''}
+        onChange={e => set('image_url', e.target.value)} />
       <button style={stileBtn('#2ecc71')} disabled={loading}
         onClick={() => onSave(form)}>
         {loading ? '...' : '✓ Salva'}
@@ -63,52 +70,34 @@ function FormProdotto({ initial, onSave, onCancel, loading }) {
   )
 }
 
+// ──────────────────────────────────────────────────────────────
+// TAB 1 — Prodotti
+// ──────────────────────────────────────────────────────────────
 function TabProdotti() {
-  const [prodotti, setProdotti] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [showAdd, setShowAdd] = useState(false)
+  const { prodotti, loading, aggiungiProdotto, modificaProdotto, eliminaProdotto } = useProdotti()
+  const [showAdd,   setShowAdd]   = useState(false)
   const [editingId, setEditingId] = useState(null)
-  const [saving, setSaving] = useState(false)
+  const [saving,    setSaving]    = useState(false)
 
-  const fetchProdotti = useCallback(async () => {
-    setLoading(true)
-    const res = await fetch(`${API}/products`)
-    setProdotti(await res.json())
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { fetchProdotti() }, [fetchProdotti])
-
-  async function aggiungi(form) {
+  async function handleAggiungi(form) {
     if (!form.nome || !form.prezzo) return
     setSaving(true)
-    await fetch(`${API}/products`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, prezzo: parseFloat(form.prezzo) }),
-    })
+    await aggiungiProdotto(form)
     setShowAdd(false)
     setSaving(false)
-    fetchProdotti()
   }
 
-  async function modifica(id, form) {
+  async function handleModifica(id, form) {
     if (!form.nome || !form.prezzo) return
     setSaving(true)
-    await fetch(`${API}/products/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, prezzo: parseFloat(form.prezzo) }),
-    })
+    await modificaProdotto(id, form)
     setEditingId(null)
     setSaving(false)
-    fetchProdotti()
   }
 
-  async function elimina(id, nome) {
+  async function handleElimina(id, nome) {
     if (!window.confirm(`Eliminare "${nome}"?`)) return
-    await fetch(`${API}/products/${id}`, { method: 'DELETE' })
-    fetchProdotti()
+    await eliminaProdotto(id)
   }
 
   const categorieOrdinate = [...new Set(prodotti.map(p => p.categoria))].sort()
@@ -116,9 +105,7 @@ function TabProdotti() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <span style={{ color: '#aab', fontSize: '0.9rem' }}>
-          {prodotti.length} prodotti
-        </span>
+        <span style={{ color: '#aab', fontSize: '0.9rem' }}>{prodotti.length} prodotti</span>
         <button style={stileBtn('#e94560')} onClick={() => { setShowAdd(true); setEditingId(null) }}>
           + Aggiungi prodotto
         </button>
@@ -126,8 +113,8 @@ function TabProdotti() {
 
       {showAdd && (
         <FormProdotto
-          initial={{ nome: '', prezzo: '', categoria: 'Bar', emoji: '' }}
-          onSave={aggiungi}
+          initial={{ nome: '', prezzo: '', categoria: 'Bar', emoji: '', image_url: '' }}
+          onSave={handleAggiungi}
           onCancel={() => setShowAdd(false)}
           loading={saving}
         />
@@ -149,12 +136,13 @@ function TabProdotti() {
             }}>
               {cat === 'Bar' ? '☕' : '🍳'} {cat}
             </div>
-            {prodotti.filter(p => p.categoria === cat).map(p => (
+
+            {prodotti.filter(p => p.categoria === cat).map(p =>
               editingId === p.id ? (
                 <FormProdotto
                   key={p.id}
-                  initial={{ nome: p.nome, prezzo: p.prezzo, categoria: p.categoria, emoji: p.emoji }}
-                  onSave={form => modifica(p.id, form)}
+                  initial={{ nome: p.nome, prezzo: p.prezzo, categoria: p.categoria, emoji: p.emoji || '', image_url: p.image_url || '' }}
+                  onSave={form => handleModifica(p.id, form)}
                   onCancel={() => setEditingId(null)}
                   loading={saving}
                 />
@@ -169,7 +157,17 @@ function TabProdotti() {
                   marginBottom: '0.4rem',
                   border: '1px solid #1a4a8a22',
                 }}>
-                  <span style={{ fontSize: '1.3rem', minWidth: '2rem', textAlign: 'center' }}>{p.emoji}</span>
+                  {p.image_url ? (
+                    <img
+                      src={p.image_url}
+                      alt={p.nome}
+                      style={{ width: 48, height: 48, borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }}
+                    />
+                  ) : (
+                    <span style={{ fontSize: '1.6rem', minWidth: '48px', textAlign: 'center', lineHeight: '48px' }}>
+                      {p.emoji || '🍽'}
+                    </span>
+                  )}
                   <span style={{ color: '#fff', flex: 1, fontWeight: '600' }}>{p.nome}</span>
                   <span style={{ color: '#2ecc71', fontWeight: '700', minWidth: '60px', textAlign: 'right' }}>
                     €{Number(p.prezzo).toFixed(2)}
@@ -177,12 +175,12 @@ function TabProdotti() {
                   <button style={stileBtn('#0f3460')} onClick={() => { setEditingId(p.id); setShowAdd(false) }}>
                     ✏️ Modifica
                   </button>
-                  <button style={stileBtn('#c0392b')} onClick={() => elimina(p.id, p.nome)}>
+                  <button style={stileBtn('#c0392b')} onClick={() => handleElimina(p.id, p.nome)}>
                     🗑 Elimina
                   </button>
                 </div>
               )
-            ))}
+            )}
           </div>
         ))
       )}
@@ -190,12 +188,31 @@ function TabProdotti() {
   )
 }
 
-function RigaOrdine({ o, coloreStato, labelStato }) {
+// ──────────────────────────────────────────────────────────────
+// Riga singolo ordine con stampa
+// ──────────────────────────────────────────────────────────────
+function RigaOrdine({ o }) {
   const scontrinoRef = useRef(null)
   const handlePrint = useReactToPrint({
     contentRef: scontrinoRef,
     documentTitle: `Ordine-${o.id}`,
   })
+
+  const tuttiDone = o.statusCucina === 'done' && o.statusBar === 'done'
+  const hasCucina = o.itemsCucina?.length > 0
+  const hasBar    = o.itemsBar?.length > 0
+  let labelStato
+  if (hasCucina && hasBar) {
+    labelStato = tuttiDone
+      ? 'Completato'
+      : `Cucina: ${o.statusCucina === 'done' ? '✓' : '⏳'} | Bar: ${o.statusBar === 'done' ? '✓' : '⏳'}`
+  } else if (hasCucina) {
+    labelStato = o.statusCucina === 'done' ? 'Completato' : 'In attesa'
+  } else if (hasBar) {
+    labelStato = o.statusBar === 'done' ? 'Completato' : 'In attesa'
+  } else {
+    labelStato = '-'
+  }
 
   return (
     <div style={{
@@ -207,6 +224,7 @@ function RigaOrdine({ o, coloreStato, labelStato }) {
       alignItems: 'center',
       gap: '1rem',
       flexWrap: 'wrap',
+      position: 'relative',
     }}>
       <span style={{
         background: '#e94560',
@@ -238,17 +256,15 @@ function RigaOrdine({ o, coloreStato, labelStato }) {
         €{Number(o.total).toFixed(2)}
       </span>
       <span style={{
-        color: coloreStato,
+        color: tuttiDone ? '#2ecc71' : '#e94560',
         fontSize: '0.8rem',
         fontWeight: '600',
-        minWidth: '100px',
+        minWidth: '130px',
         textAlign: 'right',
       }}>
         {labelStato}
       </span>
-      <button onClick={handlePrint} style={stileBtn('#0f3460')}>
-        Ristampa
-      </button>
+      <button onClick={handlePrint} style={stileBtn('#0f3460')}>Ristampa</button>
       <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
         <Scontrino ref={scontrinoRef} ordine={o} />
       </div>
@@ -256,178 +272,187 @@ function RigaOrdine({ o, coloreStato, labelStato }) {
   )
 }
 
-function TabStorico() {
-  const [ordini, setOrdini] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [filtro, setFiltro] = useState('tutti')
+// ──────────────────────────────────────────────────────────────
+// TAB 2 — Storico ordini
+// ──────────────────────────────────────────────────────────────
+function toDateStr(date) {
+  return date.toISOString().slice(0, 10)
+}
 
-  const fetchOrdini = useCallback(async () => {
+function getRangeForPeriodo(p) {
+  const oggi = new Date()
+  if (p === 'settimana') {
+    const lun = new Date(oggi)
+    lun.setDate(oggi.getDate() - oggi.getDay() + (oggi.getDay() === 0 ? -6 : 1))
+    return { from: toDateStr(lun), to: toDateStr(oggi) }
+  }
+  if (p === 'mese') {
+    return { from: toDateStr(new Date(oggi.getFullYear(), oggi.getMonth(), 1)), to: toDateStr(oggi) }
+  }
+  return { from: toDateStr(oggi), to: toDateStr(oggi) }
+}
+
+function TabStorico() {
+  const [ordini,   setOrdini]   = useState([])
+  const [loading,  setLoading]  = useState(false)
+  const [periodo,  setPeriodo]  = useState('oggi')
+  const [dateFrom, setDateFrom] = useState(toDateStr(new Date()))
+  const [dateTo,   setDateTo]   = useState(toDateStr(new Date()))
+
+  const fetchOrdini = useCallback(async (p, from, to) => {
     setLoading(true)
-    const res = await fetch(`${API}/orders/today`)
-    setOrdini(await res.json())
-    setLoading(false)
+    try {
+      const url = p === 'oggi'
+        ? `${API}/orders/today`
+        : `${API}/orders/range?from=${from}&to=${to}`
+      const res = await fetch(url)
+      setOrdini(await res.json())
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  useEffect(() => { fetchOrdini() }, [fetchOrdini])
+  // Carica "oggi" al mount
+  useState(() => { fetchOrdini('oggi') })
+
+  function handlePeriodo(p) {
+    setPeriodo(p)
+    if (p !== 'personalizzato') {
+      const { from, to } = getRangeForPeriodo(p)
+      fetchOrdini(p, from, to)
+    }
+  }
+
+  // Aggiornamento real-time: nuovo ordine aggiunto solo se filtro è "oggi"
+  useSocket('storico_updated', useCallback((ordine) => {
+    if (periodo === 'oggi') {
+      setOrdini(prev => [ordine, ...prev.filter(o => o.id !== ordine.id)])
+    }
+  }, [periodo]))
 
   async function resetGiornaliero() {
     if (!window.confirm('Eliminare tutti gli ordini di oggi? Questa operazione è irreversibile.')) return
     await fetch(`${API}/orders/today`, { method: 'DELETE' })
-    fetchOrdini()
+    fetchOrdini('oggi')
   }
 
-  const ordiniFiltrati = ordini.filter(o => {
-    if (filtro === 'attesa') return o.statusCucina === 'pending' || o.statusBar === 'pending'
-    if (filtro === 'completati') return o.statusCucina === 'done' && o.statusBar === 'done'
-    return true
-  })
+  const totale    = ordini.reduce((s, o) => s + o.total, 0)
+  const numOrdini = ordini.length
 
-  const coloreStato = (o) => {
-    const tuttiDone = o.statusCucina === 'done' && o.statusBar === 'done'
-    return tuttiDone ? '#2ecc71' : '#e94560'
-  }
-
-  const labelStato = (o) => {
-    const hasCucina = o.itemsCucina.length > 0
-    const hasBar = o.itemsBar.length > 0
-    if (hasCucina && hasBar) {
-      if (o.statusCucina === 'done' && o.statusBar === 'done') return 'Completato'
-      return `Cucina: ${o.statusCucina === 'done' ? '✓' : '⏳'} | Bar: ${o.statusBar === 'done' ? '✓' : '⏳'}`
-    }
-    if (hasCucina) return o.statusCucina === 'done' ? 'Completato' : 'In attesa'
-    if (hasBar) return o.statusBar === 'done' ? 'Completato' : 'In attesa'
-    return '-'
-  }
+  const periodi = [
+    { id: 'oggi',           label: 'Oggi' },
+    { id: 'settimana',      label: 'Settimana' },
+    { id: 'mese',           label: 'Mese' },
+    { id: 'personalizzato', label: 'Personalizzato' },
+  ]
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {[['tutti', 'Tutti'], ['attesa', 'In attesa'], ['completati', 'Completati']].map(([v, l]) => (
-            <button key={v} onClick={() => setFiltro(v)} style={{
-              ...stileBtn(filtro === v ? '#e94560' : '#16213e'),
-              border: filtro === v ? 'none' : '1px solid #1a4a8a',
-            }}>
-              {l}
-            </button>
-          ))}
-        </div>
-        <button style={stileBtn('#c0392b')} onClick={resetGiornaliero}>
-          🗑 Reset giornaliero
-        </button>
+      {/* Filtri periodo */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+        {periodi.map(({ id, label }) => (
+          <button key={id} onClick={() => handlePeriodo(id)} style={{
+            ...stileBtn(periodo === id ? '#e94560' : '#16213e'),
+            border: periodo === id ? 'none' : '1px solid #1a4a8a',
+          }}>
+            {label}
+          </button>
+        ))}
       </div>
 
+      {/* Date picker per "personalizzato" */}
+      {periodo === 'personalizzato' && (
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
+          <input type="date" style={{ ...stileInput, width: 'auto' }}
+            value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+          <span style={{ color: '#aab' }}>→</span>
+          <input type="date" style={{ ...stileInput, width: 'auto' }}
+            value={dateTo} onChange={e => setDateTo(e.target.value)} />
+          <button style={stileBtn('#e94560')}
+            onClick={() => fetchOrdini('personalizzato', dateFrom, dateTo)}>
+            Cerca
+          </button>
+        </div>
+      )}
+
+      {/* Riepilogo periodo */}
+      <div style={{
+        display: 'flex',
+        gap: '1rem',
+        marginBottom: '1rem',
+        padding: '0.75rem 1rem',
+        background: '#16213e',
+        borderRadius: '10px',
+        border: '1px solid #1a4a8a33',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ color: '#aab', fontSize: '0.78rem' }}>Ordini</div>
+            <div style={{ color: '#fff', fontWeight: '800', fontSize: '1.3rem' }}>{numOrdini}</div>
+          </div>
+          <div>
+            <div style={{ color: '#aab', fontSize: '0.78rem' }}>Incasso</div>
+            <div style={{ color: '#2ecc71', fontWeight: '800', fontSize: '1.3rem' }}>€{totale.toFixed(2)}</div>
+          </div>
+          {numOrdini > 0 && (
+            <div>
+              <div style={{ color: '#aab', fontSize: '0.78rem' }}>Scontrino medio</div>
+              <div style={{ color: '#e94560', fontWeight: '700', fontSize: '1.1rem' }}>
+                €{(totale / numOrdini).toFixed(2)}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {periodo === 'oggi' && (
+          <button style={stileBtn('#c0392b')} onClick={resetGiornaliero}>
+            🗑 Reset giornaliero
+          </button>
+        )}
+      </div>
+
+      {/* Lista ordini */}
       {loading ? (
         <div style={{ textAlign: 'center', color: '#556', padding: '2rem' }}>Caricamento...</div>
-      ) : ordiniFiltrati.length === 0 ? (
+      ) : ordini.length === 0 ? (
         <div style={{ textAlign: 'center', color: '#556', padding: '3rem' }}>
           <div style={{ fontSize: '2.5rem' }}>📋</div>
-          <p style={{ marginTop: '0.5rem' }}>Nessun ordine</p>
+          <p style={{ marginTop: '0.5rem' }}>Nessun ordine nel periodo selezionato</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', position: 'relative' }}>
-          {ordiniFiltrati.map(o => (
-            <RigaOrdine
-              key={o.id}
-              o={o}
-              coloreStato={coloreStato(o)}
-              labelStato={labelStato(o)}
-            />
-          ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          {ordini.map(o => <RigaOrdine key={o.id} o={o} />)}
         </div>
       )}
     </div>
   )
 }
 
-function TabIncasso() {
-  const [ordini, setOrdini] = useState([])
-  const [loading, setLoading] = useState(false)
-
-  const fetchOrdini = useCallback(async () => {
-    setLoading(true)
-    const res = await fetch(`${API}/orders/today`)
-    setOrdini(await res.json())
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { fetchOrdini() }, [fetchOrdini])
-
-  const totale = ordini.reduce((s, o) => s + o.total, 0)
-  const totaleBar = ordini.reduce((s, o) =>
-    s + o.itemsBar.reduce((ss, i) => ss + i.prezzo * i.quantita, 0), 0)
-  const totaleCucina = ordini.reduce((s, o) =>
-    s + o.itemsCucina.reduce((ss, i) => ss + i.prezzo * i.quantita, 0), 0)
-
-  const card = (label, valore, colore, icona) => (
-    <div style={{
-      background: '#16213e',
-      borderRadius: '14px',
-      padding: '1.5rem',
-      border: `2px solid ${colore}33`,
-      flex: 1,
-      minWidth: '180px',
-    }}>
-      <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{icona}</div>
-      <div style={{ color: '#aab', fontSize: '0.85rem', marginBottom: '0.3rem' }}>{label}</div>
-      <div style={{ color: colore, fontSize: '1.8rem', fontWeight: '800' }}>
-        {loading ? '...' : `€${valore.toFixed(2)}`}
-      </div>
-    </div>
-  )
-
-  return (
-    <div>
-      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
-        {card('Incasso totale', totale, '#e94560', '💰')}
-        {card('Incasso Bar', totaleBar, '#3498db', '☕')}
-        {card('Incasso Cucina', totaleCucina, '#e67e22', '🍳')}
-      </div>
-
-      <div style={{
-        background: '#16213e',
-        borderRadius: '14px',
-        padding: '1.25rem',
-        border: '1px solid #1a4a8a33',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '1.5rem',
-      }}>
-        <div style={{ fontSize: '2.5rem' }}>📊</div>
-        <div>
-          <div style={{ color: '#aab', fontSize: '0.85rem' }}>Ordini oggi</div>
-          <div style={{ color: '#fff', fontSize: '2rem', fontWeight: '800' }}>
-            {loading ? '...' : ordini.length}
-          </div>
-        </div>
-        {ordini.length > 0 && (
-          <div style={{ marginLeft: '2rem' }}>
-            <div style={{ color: '#aab', fontSize: '0.85rem' }}>Scontrino medio</div>
-            <div style={{ color: '#2ecc71', fontSize: '1.4rem', fontWeight: '700' }}>
-              €{(totale / ordini.length).toFixed(2)}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
+// ──────────────────────────────────────────────────────────────
+// Root AdminPage — 2 tab: Prodotti + Storico
+// ──────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('prodotti')
 
   const tabs = [
     { id: 'prodotti', label: '🛒 Prodotti' },
     { id: 'storico',  label: '📋 Storico ordini' },
-    { id: 'incasso',  label: '💰 Incasso' },
   ]
 
   return (
     <div style={{ minHeight: 'calc(100vh - 52px)', background: '#0f0f23', padding: '1.5rem' }}>
       <h1 style={{ margin: '0 0 1.5rem', color: '#fff', fontSize: '1.4rem' }}>⚙️ Pannello Admin</h1>
 
-      {/* Tab bar */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid #1a4a8a44', paddingBottom: '0.75rem' }}>
+      <div style={{
+        display: 'flex',
+        gap: '0.5rem',
+        marginBottom: '1.5rem',
+        borderBottom: '1px solid #1a4a8a44',
+        paddingBottom: '0.75rem',
+      }}>
         {tabs.map(t => (
           <button
             key={t.id}
@@ -449,10 +474,8 @@ export default function AdminPage() {
         ))}
       </div>
 
-      {/* Tab content */}
       {activeTab === 'prodotti' && <TabProdotti />}
       {activeTab === 'storico'  && <TabStorico />}
-      {activeTab === 'incasso'  && <TabIncasso />}
     </div>
   )
 }
