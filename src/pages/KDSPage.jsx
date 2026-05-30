@@ -1,12 +1,20 @@
+import { useCallback } from 'react'
 import { useOrdini } from '../context/OrdiniContext'
 import OrderCard from '../components/OrderCard'
-import socket from '../hooks/useSocket'
+import socket, { useSocket } from '../hooks/useSocket'
+import { playBeep } from '../utils/sound'
 
 export default function KDSPage() {
   const { ordini, segnaProntoCucina } = useOrdini()
   const ordiniConCucina = ordini.filter(o => o.itemsCucina.length > 0)
   const pending = ordiniConCucina.filter(o => o.statusCucina === 'pending')
   const completati = ordiniConCucina.filter(o => o.statusCucina === 'done')
+
+  useSocket('new_order', useCallback((ordine) => {
+    if (ordine.itemsCucina && ordine.itemsCucina.length > 0) {
+      playBeep()
+    }
+  }, []))
 
   async function handlePronto(id) {
     await segnaProntoCucina(id)
