@@ -56,4 +56,8 @@ if (catCount.cnt === 0) {
   insertProd.run('Pizza margherita', 6.00, cucinaId, '🍕')
 }
 
+try {
+  db.exec('ALTER TABLE products ADD COLUMN image_url TEXT')
+} catch (_) { /* column already exists */ }
+
 module.exports = db

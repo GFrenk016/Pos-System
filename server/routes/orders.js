@@ -34,6 +34,16 @@ router.get('/today', (req, res) => {
   res.json(orders.map(formatOrder))
 })
 
+// GET /api/orders/range?from=YYYY-MM-DD&to=YYYY-MM-DD
+router.get('/range', (req, res) => {
+  const { from, to } = req.query
+  if (!from || !to) return res.status(400).json({ error: 'Parametri from e to obbligatori' })
+  const orders = db.prepare(
+    "SELECT * FROM orders WHERE date(created_at, 'localtime') BETWEEN ? AND ? ORDER BY created_at DESC"
+  ).all(from, to)
+  res.json(orders.map(formatOrder))
+})
+
 // DELETE /api/orders/today — elimina tutti gli ordini di oggi
 router.delete('/today', (req, res) => {
   const count = db.transaction(() => {
@@ -70,7 +80,9 @@ router.post('/', (req, res) => {
 
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId)
   const formatted = formatOrder(order)
-  req.app.get('io').emit('new_order', formatted)
+  const io = req.app.get('io')
+  io.emit('new_order', formatted)
+  io.emit('storico_updated', formatted)
   res.status(201).json(formatted)
 })
 
