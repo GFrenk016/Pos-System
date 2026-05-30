@@ -1,12 +1,20 @@
+import { useCallback } from 'react'
 import { useOrdini } from '../context/OrdiniContext'
 import OrderCard from '../components/OrderCard'
-import socket from '../hooks/useSocket'
+import socket, { useSocket } from '../hooks/useSocket'
+import { playBeep } from '../utils/sound'
 
 export default function BarPage() {
   const { ordini, segnaProintoBar } = useOrdini()
   const ordiniConBar = ordini.filter(o => o.itemsBar.length > 0)
   const pending = ordiniConBar.filter(o => o.statusBar === 'pending')
   const completati = ordiniConBar.filter(o => o.statusBar === 'done')
+
+  useSocket('new_order', useCallback((ordine) => {
+    if (ordine.itemsBar && ordine.itemsBar.length > 0) {
+      playBeep()
+    }
+  }, []))
 
   async function handlePronto(id) {
     await segnaProintoBar(id)

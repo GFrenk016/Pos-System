@@ -16,13 +16,38 @@ function formatOrder(order) {
   return {
     id:           order.id,
     ora:          new Date(order.created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+    created_at:   order.created_at,
     items,
     itemsCucina:  items.filter(i => i.categoria === 'Cucina'),
     itemsBar:     items.filter(i => i.categoria === 'Bar'),
     statusCucina: order.status_cucina,
     statusBar:    order.status_bar,
+    total:        items.reduce((sum, i) => sum + i.prezzo * i.quantita, 0),
   }
 }
+
+// GET /api/orders/today — ordini di oggi con items e totale
+router.get('/today', (req, res) => {
+  const orders = db.prepare(
+    "SELECT * FROM orders WHERE date(created_at) = date('now', 'localtime') ORDER BY created_at DESC"
+  ).all()
+  res.json(orders.map(formatOrder))
+})
+
+// DELETE /api/orders/today — elimina tutti gli ordini di oggi
+router.delete('/today', (req, res) => {
+  const count = db.transaction(() => {
+    const ids = db.prepare(
+      "SELECT id FROM orders WHERE date(created_at) = date('now', 'localtime')"
+    ).all()
+    for (const { id } of ids) {
+      db.prepare('DELETE FROM order_items WHERE order_id = ?').run(id)
+    }
+    db.prepare("DELETE FROM orders WHERE date(created_at) = date('now', 'localtime')").run()
+    return ids.length
+  })()
+  res.json({ deleted: count })
+})
 
 router.get('/', (req, res) => {
   const orders = db.prepare('SELECT * FROM orders ORDER BY created_at DESC').all()
