@@ -1,11 +1,17 @@
 import { useOrdini } from '../context/OrdiniContext'
 import OrderCard from '../components/OrderCard'
+import socket from '../hooks/useSocket'
 
 export default function KDSPage() {
   const { ordini, segnaProntoCucina } = useOrdini()
   const ordiniConCucina = ordini.filter(o => o.itemsCucina.length > 0)
   const pending = ordiniConCucina.filter(o => o.statusCucina === 'pending')
   const completati = ordiniConCucina.filter(o => o.statusCucina === 'done')
+
+  async function handlePronto(id) {
+    await segnaProntoCucina(id)
+    socket.emit('order_ready', { ordineId: id, tipo: 'cucina' })
+  }
 
   return (
     <div style={{ minHeight: 'calc(100vh - 52px)', background: '#0f0f23', padding: '1.5rem' }}>
@@ -31,14 +37,13 @@ export default function KDSPage() {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '1rem' }}>
-        {/* Prima i pending, poi i completati */}
         {[...pending, ...completati].map(ordine => (
           <OrderCard
             key={ordine.id}
             ordine={ordine}
             items={ordine.itemsCucina}
             status={ordine.statusCucina}
-            onPronto={segnaProntoCucina}
+            onPronto={handlePronto}
             colore="#e67e22"
           />
         ))}
