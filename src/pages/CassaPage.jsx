@@ -2,11 +2,13 @@ import { useState } from 'react'
 import ProductGrid from '../components/ProductGrid'
 import Cart from '../components/Cart'
 import { useOrdini } from '../context/OrdiniContext'
+import { useProdotti } from '../hooks/useProdotti'
 
 export default function CassaPage() {
     const [carrello, setCarrello] = useState([])
     const [ordineSent, setOrdineSent] = useState(false)
     const { inviaOrdine } = useOrdini()
+    const { prodotti } = useProdotti()
 
     function handleAdd(prodotto) {
         setCarrello(prev => {
@@ -59,7 +61,7 @@ export default function CassaPage() {
                 {new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
             </span>
             </div>
-            <ProductGrid onAdd={handleAdd} />
+            <ProductGrid prodotti={prodotti} onAdd={handleAdd} />
         </div>
         <Cart items={carrello} onRemove={handleRemove} onInvia={handleInvia} />
         {ordineSent && (
