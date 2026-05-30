@@ -7,7 +7,9 @@ function parseMinutesAgo(ora) {
   const now = new Date()
   const orderTime = new Date()
   orderTime.setHours(h, m, 0, 0)
-  return Math.max(0, Math.floor((now - orderTime) / 60000))
+  const diff = Math.floor((now - orderTime) / 60000)
+  // se negativo (mezzanotte) aggiungi 1440 minuti (24h)
+  return diff < 0 ? diff + 1440 : diff
 }
 
 export default function OrderCard({ ordine, items, status, onPronto, colore }) {
