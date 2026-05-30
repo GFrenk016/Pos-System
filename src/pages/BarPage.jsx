@@ -1,11 +1,17 @@
 import { useOrdini } from '../context/OrdiniContext'
 import OrderCard from '../components/OrderCard'
+import socket from '../hooks/useSocket'
 
 export default function BarPage() {
   const { ordini, segnaProintoBar } = useOrdini()
   const ordiniConBar = ordini.filter(o => o.itemsBar.length > 0)
   const pending = ordiniConBar.filter(o => o.statusBar === 'pending')
   const completati = ordiniConBar.filter(o => o.statusBar === 'done')
+
+  async function handlePronto(id) {
+    await segnaProintoBar(id)
+    socket.emit('order_ready', { ordineId: id, tipo: 'bar' })
+  }
 
   return (
     <div style={{ minHeight: 'calc(100vh - 52px)', background: '#0f0f23', padding: '1.5rem' }}>
@@ -37,7 +43,7 @@ export default function BarPage() {
             ordine={ordine}
             items={ordine.itemsBar}
             status={ordine.statusBar}
-            onPronto={segnaProintoBar}
+            onPronto={handlePronto}
             colore="#3498db"
           />
         ))}

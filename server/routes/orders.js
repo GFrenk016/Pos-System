@@ -44,7 +44,9 @@ router.post('/', (req, res) => {
   })()
 
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId)
-  res.status(201).json(formatOrder(order))
+  const formatted = formatOrder(order)
+  req.app.get('io').emit('new_order', formatted)
+  res.status(201).json(formatted)
 })
 
 router.patch('/:id', (req, res) => {
